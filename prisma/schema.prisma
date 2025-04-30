@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Note {
+  id          String       @id @default(uuid())
+  title       String
+  metadata    Json?
+  chunks      NoteChunk[]
+  type        DocumentType @default(TEXT)
+  workspaceId String?      @map("workspace_id")
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
+}
+
+model NoteChunk {
+  id         Int    @id @default(autoincrement())
+  noteId     String
+  content    String
+  chunkIndex Int
+  metadata   Json?
+
+  note Note @relation(fields: [noteId], references: [id])
+
+  @@index([noteId, chunkIndex])
+}
+
+model MessageTemp {
+  id          Int      @id @default(autoincrement())
+  content     Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  workspaceId String
+  sessionId   String
+}
+
+//use this for vector search and delete
+model VectorEntry {
+  id        Int      @id @default(autoincrement())
+  docId     String   @map("doc_id")
+  vectorId  String   @map("vector_id") //noteChunk.id
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  hashedPassword String?         @map("hashed_password")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  workspaces     WorkspaceUser[]
+  status         Status          @default(ACTIVE)
+}
+
+model Workspace {
+  id        String          @id @default(uuid())
+  name      String
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  users     WorkspaceUser[]
+  status    Status          @default(ACTIVE)
+
+  Note Note[]
+}
+
+model WorkspaceUser {
+  userId      String        @map("user_id")
+  workspaceId String        @map("workspace_id")
+  role        WorkspaceRole
+
+  user      User      @relation(fields: [userId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@id([userId, workspaceId])
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum DocumentType {
+  TEXT
+  WEBSITE
+}

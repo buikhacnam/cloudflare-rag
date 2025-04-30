@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Widget</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+        }
+
+        #chat-widget-container {
+            position: fixed;
+            bottom: 90px; /* Position above the toggle button */
+            right: 20px;
+            width: 370px; /* Slightly smaller */
+            height: 500px; /* Slightly smaller */
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1000; /* Ensure it's above other content */
+        }
+
+        #chat-widget-container.open {
+            display: flex; /* Show when open class is added */
+        }
+
+        /* Add a header section */
+        #chat-header {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+
+        #close-chat-button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+
+        #message-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px; /* Adjusted padding */
+            /* border-bottom: 1px solid #eee; No border needed if header/input area have backgrounds */
+            background-color: #fff; /* Ensure background */
+        }
+
+        .message {
+            margin-bottom: 12px; /* Adjusted margin */
+            padding: 8px 12px; /* Adjusted padding */
+            border-radius: 15px; /* Adjusted radius */
+            max-width: 80%; /* Allow slightly wider messages */
+            line-height: 1.4;
+        }
+
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto; /* Push to the right */
+        }
+
+        .model-message {
+            background-color: #e9e9eb;
+            color: #333;
+            align-self: flex-start;
+            margin-right: auto; /* Push to the left */
+        }
+
+        #thinking-indicator {
+            padding: 5px 15px;
+            font-style: italic;
+            color: #888;
+            display: none; /* Hidden by default */
+            text-align: left; /* Align left under model message */
+            background-color: #fff; /* Ensure background */
+        }
+
+        #input-area {
+            display: flex;
+            padding: 12px; /* Adjusted padding */
+            background-color: #f9f9f9;
+            border-top: 1px solid #eee; /* Add separator line */
+        }
+
+        #message-input {
+            flex-grow: 1;
+            padding: 10px 15px; /* Adjusted padding */
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            margin-right: 8px; /* Adjusted margin */
+            font-size: 14px;
+        }
+
+        #send-button {
+            padding: 10px 18px; /* Adjusted padding */
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s ease; /* Add transition */
+        }
+
+        #send-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Styles for the toggle button */
+        #chat-toggle-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%; /* Make it round */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-size: 24px; /* Adjust icon size */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999; /* Below the widget itself */
+            transition: background-color 0.2s ease;
+        }
+
+        #chat-toggle-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <!-- The chat widget container (initially hidden) -->
+    <div id="chat-widget-container">
+        <div id="chat-header">
+            <span>Chat</span>
+            <button id="close-chat-button">&times;</button> <!-- Close button -->
+        </div>
+        <div id="message-list">
+            <!-- Messages will be appended here by JavaScript -->
+        </div>
+        <div id="thinking-indicator">Agent is thinking...</div>
+        <input type="text" id="workspace-id-input" placeholder="Workspace ID" style="margin: 10px 12px 5px 12px; width: calc(100% - 24px); box-sizing: border-box; padding: 8px 15px; border: 1px solid #ccc; border-radius: 15px; font-size: 13px;">
+        <div id="input-area">
+            <input type="text" id="message-input" placeholder="Type your message...">
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+
+    <!-- The toggle button -->
+    <button id="chat-toggle-button">
+        <!-- Placeholder for an icon, e.g., SVG or Font Awesome -->
+        💬
+    </button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const messageList = document.getElementById('message-list');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const thinkingIndicator = document.getElementById('thinking-indicator');
+            const chatWidgetContainer = document.getElementById('chat-widget-container');
+            const chatToggleButton = document.getElementById('chat-toggle-button');
+            const closeChatButton = document.getElementById('close-chat-button'); // Get close button
+            const workspaceIdInput = document.getElementById('workspace-id-input'); // Get workspace ID input
+
+            let sessionId = null;
+            let historyLoaded = false; // Flag to track if history has been loaded
+
+            // Function to open the chat widget
+            function openChat() {
+                chatWidgetContainer.style.display = 'flex'; // Use flex as defined in CSS
+                 chatWidgetContainer.classList.add('open'); // Add class if using class-based toggling
+                 chatToggleButton.style.display = 'none'; // Hide toggle button when chat is open
+                // Load history only on first open, if sessionId exists
+                if (sessionId && !historyLoaded) {
+                     loadHistory(sessionId);
+                     historyLoaded = true; // Mark history as loaded
+                }
+                 // Focus input field when opening
+                 setTimeout(() => messageInput.focus(), 0);
+            }
+
+            // Function to close the chat widget
+            function closeChat() {
+                 chatWidgetContainer.style.display = 'none';
+                 chatWidgetContainer.classList.remove('open'); // Remove class
+                 chatToggleButton.style.display = 'flex'; // Show toggle button again
+            }
+
+            // Function to add a message to the chat display
+            function displayMessage(sender, text) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                messageElement.classList.add(sender === 'user' ? 'user-message' : 'model-message');
+                messageElement.textContent = text;
+                messageList.appendChild(messageElement);
+                // Scroll to the bottom
+                messageList.scrollTop = messageList.scrollHeight;
+            }
+
+            // Function to handle sending a message
+            async function sendMessage() {
+                const messageText = messageInput.value.trim();
+                if (messageText === '') return;
+
+                // Display user message immediately
+                displayMessage('user', messageText);
+                messageInput.value = ''; // Clear input
+                thinkingIndicator.style.display = 'block'; // Show thinking indicator
+                messageList.scrollTop = messageList.scrollHeight; // Scroll down
+
+                const apiUrl = sessionId ? `/playground/chat/${sessionId}` : '/playground/chat';
+                const workspaceId = workspaceIdInput.value.trim(); // Get workspace ID
+                if (!workspaceId) {
+                    alert('Please enter a Workspace ID.'); // Basic validation
+                    window.location.reload();
+                }
+                const requestBody = { message: messageText, workspaceId: workspaceId }; // Include workspaceId
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestBody),
+                    });
+
+                    thinkingIndicator.style.display = 'none'; // Hide thinking indicator
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('API Error:', errorData);
+                        displayMessage('model', `Error: ${errorData.message || response.statusText}`);
+                        return;
+                    }
+
+                    const data = await response.json();
+
+                    if (data.success && data.data.answer) {
+                        sessionId = data.data.sessionId; // Update session ID
+                        displayMessage('model', data.data.answer);
+                    } else {
+                        displayMessage('model', 'Received an unexpected response from the server.');
+                        console.error('Unexpected response format:', data);
+                    }
+
+                } catch (error) {
+                    thinkingIndicator.style.display = 'none'; // Hide thinking indicator
+                    console.error('Fetch Error:', error);
+                    displayMessage('model', `Error sending message: ${error.message}`);
+                }
+            }
+
+            // --- New Function: Load History ---
+            async function loadHistory(currentSessionId) {
+                if (!currentSessionId) return;
+
+                console.log(`Loading history for session: ${currentSessionId}`);
+                const historyUrl = `/playground/chat/history/${currentSessionId}`;
+                try {
+                    const response = await fetch(historyUrl);
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('Error fetching history:', errorData);
+                        displayMessage('model', `Error loading history: ${errorData.message || response.statusText}`);
+                        return;
+                    }
+
+                    const data = await response.json();
+                    if (data.success && data.data.history) {
+                        messageList.innerHTML = ''; // Clear placeholder messages if any
+                        data.data.history.forEach(message => {
+                            displayMessage(message.role, message.content);
+                        });
+                        // Scroll to bottom after loading history
+                        messageList.scrollTop = messageList.scrollHeight;
+                        console.log(`Loaded ${data.data.history.length} messages.`);
+                    } else {
+                         console.error('Unexpected history response format:', data);
+                         displayMessage('model', 'Failed to load history due to unexpected server response.');
+                    }
+                } catch (error) {
+                    console.error('Fetch Error loading history:', error);
+                    displayMessage('model', `Error loading history: ${error.message}`);
+                }
+            }
+
+            // --- Initialization Logic ---
+            
+            // Extract sessionId from URL path
+            const pathSegments = window.location.pathname.split('/').filter(Boolean);
+            // Assuming URL is /playground/widget/chat/SESSION_ID
+            if (pathSegments.length === 4 && pathSegments[0] === 'playground' && pathSegments[1] === 'widget' && pathSegments[2] === 'chat') {
+                sessionId = pathSegments[3];
+                console.log(`Extracted sessionId: ${sessionId}`);
+                // Don't load history immediately, wait for widget open
+                // await loadHistory(sessionId);
+            } else {
+                console.log('Session ID not found in URL path. Starting new session flow.');
+                // Handle cases where the URL doesn't have the session ID
+                // Maybe display a different initial state or rely on the first message
+                // For now, we just won't load history. A new session will be created on first send.
+            }
+            
+            // --- Event Listeners ---
+            chatToggleButton.addEventListener('click', openChat); // Toggle opens chat
+            closeChatButton.addEventListener('click', closeChat); // Close button closes chat
+
+            sendButton.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            // Initial message from the bot (optional - can be removed if history loads)
+            // displayMessage('model', 'Hello! How can I help you?'); // Example initial message if needed
+        }); 
+    </script>
+</body>
+</html> 

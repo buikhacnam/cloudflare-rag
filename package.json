@@ -1,0 +1,26 @@
+{
+	"name": "cloudflare-d1-with-prisma",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev --experimental-vectorize-bind-to-prod",
+		"start": "wrangler dev --experimental-vectorize-bind-to-prod",
+		"test": "vitest",
+		"cf-typegen": "wrangler types"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.7.5",
+		"bcryptjs": "^3.0.2",
+		"prisma": "^6.6.0",
+		"typescript": "^5.5.2",
+		"vitest": "~3.0.7",
+		"wrangler": "^4.13.1"
+	},
+	"dependencies": {
+		"@prisma/adapter-d1": "^6.6.0",
+		"@prisma/client": "^6.6.0",
+		"jose": "^6.0.10",
+		"langchain": "^0.3.24"
+	}
+}
